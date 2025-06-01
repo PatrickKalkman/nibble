@@ -6,7 +6,7 @@ import path from 'path';
 class NibbleService {
   constructor(appAuth) {
     this.appAuth = appAuth;
-    this.installations = new Map(); // In production, use a proper database
+    this.installations = new Map();
   }
 
   async handleInstallation(installation) {
@@ -21,7 +21,6 @@ class NibbleService {
   }
 
   async scheduleDailyNibble(repository, installation) {
-    // Store repository info for nightly processing
     const installationData = this.installations.get(installation.id) || {};
     installationData.repositories = installationData.repositories || [];
     
