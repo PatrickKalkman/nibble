@@ -134,3 +134,15 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+#keys
+.pem
+.crt
+# Certificates
+*.cer
+*.pem
+# Private keys
+*.key
+# Public keys
+*.pub
+
