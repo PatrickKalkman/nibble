@@ -5,7 +5,10 @@ import { createAppAuth } from '@octokit/auth-app';
 import { Octokit } from '@octokit/rest';
 import cron from 'node-cron';
 import { readFileSync } from 'fs';
+import pino from 'pino';
 import NibbleService from './services/nibbleService.js';
+
+const logger = pino();
 
 const port = process.env.PORT || 3000;
 
@@ -55,7 +58,7 @@ const app = fastify({ logger: true });
 
 // Webhook handlers
 webhooks.on('installation.created', async ({ payload }) => {
-  console.log(`Nibble installed on ${payload.installation.account.login}`);
+  logger.info(`Nibble installed on ${payload.installation.account.login}`);
   // Optionally store installation info
   await nibbleService.handleInstallation(payload.installation);
 });
@@ -63,7 +66,7 @@ webhooks.on('installation.created', async ({ payload }) => {
 webhooks.on('push', async ({ payload }) => {
   // Only process pushes to main/master branch
   if (payload.ref === 'refs/heads/main' || payload.ref === 'refs/heads/master') {
-    console.log(`Push detected to ${payload.repository.full_name}`);
+    logger.info(`Push detected to ${payload.repository.full_name}`);
     // Trigger a nibble analysis (could be async)
     await nibbleService.scheduleDailyNibble(payload.repository, payload.installation);
   }
@@ -97,7 +100,7 @@ app.post('/webhooks', async (request, reply) => {
     
     reply.code(200).send('OK');
   } catch (error) {
-    console.error('Webhook error:', error);
+    logger.error('Webhook error:', error);
     reply.code(400).send(`Webhook error: ${error.message}`);
   }
 });
@@ -109,7 +112,7 @@ app.post('/trigger-nibble/:owner/:repo', async (request, reply) => {
     const result = await nibbleService.performNibble(owner, repo);
     return { success: true, result };
   } catch (error) {
-    console.error('Error in manual trigger:', error);
+    logger.error('Error in manual trigger:', error);
     reply.code(500);
     return { error: error.message };
   }
@@ -132,7 +135,7 @@ app.get('/debug/installations', async (request, reply) => {
 
 // Schedule nightly nibbles (2 AM UTC)
 cron.schedule('0 2 * * *', async () => {
-  console.log('Running nightly nibble job...');
+  logger.info('Running nightly nibble job...');
   await nibbleService.runNightlyNibbles();
 });
 
@@ -140,8 +143,8 @@ cron.schedule('0 2 * * *', async () => {
 const start = async () => {
   try {
     await app.listen({ port, host: '0.0.0.0' });
-    console.log(`Nibble GitHub App listening on port ${port}`);
-    console.log('Ready to make your code slightly better, one bite at a time! 🍽️');
+    logger.info(`Nibble GitHub App listening on port ${port}`);
+    logger.info('Ready to make your code slightly better, one bite at a time! 🍽️');
   } catch (err) {
     app.log.error(err);
     process.exit(1);
