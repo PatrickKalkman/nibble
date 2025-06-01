@@ -1,27 +1,83 @@
-import { Octokit } from '@octokit/rest';
-import simpleGit from 'simple-git';
 import { promises as fs } from 'fs';
 import path from 'path';
 
 class NibbleService {
-  constructor(appAuth) {
-    this.appAuth = appAuth;
+  constructor(app) {
+    this.app = app;
     this.installations = new Map();
+    this.installationsFile = path.join(__dirname, '../../data/installations.json');
+    this.loadInstallations(); // Load on startup
+  }
+
+  async loadInstallations() {
+    try {
+      // Ensure data directory exists
+      await fs.mkdir(path.dirname(this.installationsFile), { recursive: true });
+      
+      // Try to load existing installations
+      const data = await fs.readFile(this.installationsFile, 'utf8');
+      const installations = JSON.parse(data);
+      
+      // Convert array back to Map
+      for (const installation of installations) {
+        this.installations.set(installation.id, installation);
+      }
+      
+      console.log(`Loaded ${installations.length} installations from disk`);
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.error('Error loading installations:', error.message);
+      } else {
+        console.log('No existing installations file found, starting fresh');
+      }
+    }
+  }
+
+  async saveInstallations() {
+    try {
+      const installations = Array.from(this.installations.values());
+      await fs.writeFile(this.installationsFile, JSON.stringify(installations, null, 2));
+      console.log(`Saved ${installations.length} installations to disk`);
+    } catch (error) {
+      console.error('Error saving installations:', error.message);
+    }
   }
 
   async handleInstallation(installation) {
-    this.installations.set(installation.id, {
+    const installationData = {
       id: installation.id,
       account: installation.account.login,
-      repositories: installation.repositories || [],
+      repositories: [],
       lastNibble: null,
-      enabled: true
-    });
-    console.log(`Stored installation for ${installation.account.login}`);
+      enabled: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // If installation has repositories list, add them
+    if (installation.repositories) {
+      installationData.repositories = installation.repositories.map(repo => ({
+        id: repo.id,
+        full_name: repo.full_name,
+        default_branch: repo.default_branch,
+        language: repo.language
+      }));
+    }
+
+    this.installations.set(installation.id, installationData);
+    await this.saveInstallations(); // Persist to disk
+    console.log(`Stored installation ${installation.id} for ${installation.account.login} with ${installationData.repositories.length} repositories`);
   }
 
   async scheduleDailyNibble(repository, installation) {
-    const installationData = this.installations.get(installation.id) || {};
+    // Store repository info for nightly processing
+    const installationData = this.installations.get(installation.id);
+    if (!installationData) {
+      console.log(`Installation ${installation.id} not found, creating new entry`);
+      await this.handleInstallation(installation);
+      return;
+    }
+    
     installationData.repositories = installationData.repositories || [];
     
     const repoExists = installationData.repositories.find(r => r.full_name === repository.full_name);
@@ -32,10 +88,53 @@ class NibbleService {
         default_branch: repository.default_branch,
         language: repository.language
       });
+      
+      installationData.updatedAt = new Date().toISOString();
+      this.installations.set(installation.id, installationData);
+      await this.saveInstallations(); // Persist changes
     }
     
-    this.installations.set(installation.id, installationData);
     console.log(`Scheduled ${repository.full_name} for daily nibbles`);
+  }
+
+  async refreshInstallationsFromGitHub() {
+    try {
+      console.log('Fetching installations from GitHub API...');
+      
+      // Get all installations for this app
+      const installations = await this.app.octokit.rest.apps.listInstallations();
+      
+      for (const installation of installations.data) {
+        // Get repositories for each installation
+        const installationOctokit = await this.app.getInstallationOctokit(installation.id);
+        const repos = await installationOctokit.rest.apps.listReposAccessibleToInstallation();
+        
+        const installationData = {
+          id: installation.id,
+          account: installation.account.login,
+          repositories: repos.data.repositories.map(repo => ({
+            id: repo.id,
+            full_name: repo.full_name,
+            default_branch: repo.default_branch,
+            language: repo.language
+          })),
+          lastNibble: null,
+          enabled: true,
+          createdAt: installation.created_at,
+          updatedAt: new Date().toISOString()
+        };
+        
+        this.installations.set(installation.id, installationData);
+      }
+      
+      await this.saveInstallations();
+      console.log(`Refreshed ${installations.data.length} installations from GitHub`);
+      
+      return installations.data.length;
+    } catch (error) {
+      console.error('Error refreshing installations:', error.message);
+      throw error;
+    }
   }
 
   async runNightlyNibbles() {
@@ -45,8 +144,7 @@ class NibbleService {
       if (!data.enabled) continue;
       
       try {
-        const auth = await this.appAuth({ type: "installation", installationId });
-        const octokit = new Octokit({ auth });
+        const octokit = await this.app.getInstallationOctokit(installationId);
         
         for (const repo of data.repositories || []) {
           try {
@@ -69,11 +167,11 @@ class NibbleService {
         .find(inst => inst.repositories?.some(r => r.full_name === `${owner}/${repo}`));
       
       if (!installation) {
-        throw new Error(`No installation found for ${owner}/${repo}`);
+        throw new Error(`No installation found for ${owner}/${repo}. Make sure the app is installed on this repository.`);
       }
       
-      const auth = await this.appAuth({ type: "installation", installationId: installation.id });
-      octokit = new Octokit({ auth });
+      console.log(`Using installation ${installation.id} for ${owner}/${repo}`);
+      octokit = await this.app.getInstallationOctokit(installation.id);
     }
 
     console.log(`Performing nibble on ${owner}/${repo}`);
@@ -114,7 +212,7 @@ class NibbleService {
     });
 
     // For now, let's create a simple improvement (we'll replace this with AI later)
-    const improvement = await this.findNibbleImprovement(octokit, owner, repo, defaultBranch);
+    const improvement = await this.findSimpleImprovement(octokit, owner, repo, defaultBranch);
     
     if (!improvement) {
       // Delete the branch if no improvement found
@@ -148,27 +246,27 @@ class NibbleService {
     };
   }
 
-  async findNibbleImprovement(octokit, owner, repo, branch) {
-    // For now, let's implement a simple NIBBLE finder
+  async findSimpleImprovement(octokit, owner, repo, branch) {
+    // For now, let's implement a simple TODO finder
     // Later we'll replace this with AI analysis
     
     try {
-      // Search for NIBBLE comments
+      // Search for TODO comments
       const searchResult = await octokit.search.code({
-        q: `NIBBLE repo:${owner}/${repo}`,
+        q: `TODO repo:${owner}/${repo}`,
         per_page: 10
       });
 
       if (searchResult.data.items.length > 0) {
-        const nibbleItem = searchResult.data.items[0];
+        const todoItem = searchResult.data.items[0];
         
         return {
-          type: 'nibble_comment',
-          title: 'Address NIBBLE comment',
-          file: nibbleItem.path,
-          description: `Found NIBBLE comment in ${nibbleItem.path}`,
+          type: 'todo_comment',
+          title: 'Address TODO comment',
+          file: todoItem.path,
+          description: `Found TODO comment in ${todoItem.path}`,
           action: 'add_comment',
-          details: 'Added implementation note for NIBBLE item'
+          details: 'Added implementation note for TODO item'
         };
       }
 
@@ -204,7 +302,7 @@ class NibbleService {
   }
 
   async applyImprovement(octokit, owner, repo, branch, improvement) {
-    if (improvement.type === 'nibble_comment') {
+    if (improvement.type === 'todo_comment') {
       // Get the file content
       const fileResult = await octokit.repos.getContent({
         owner,
@@ -215,10 +313,10 @@ class NibbleService {
 
       let content = Buffer.from(fileResult.data.content, 'base64').toString();
       
-      // Simple improvement: add a comment after NIBBLE
+      // Simple improvement: add a comment after TODO
       content = content.replace(
-        /\/\/\s*NIBBLE:/g, 
-        '// NIBBLE: (Nibble note: Consider implementing this soon)\n// NIBBLE:'
+        /\/\/\s*TODO:/g, 
+        '// TODO: (Nibble note: Consider implementing this soon)\n// TODO:'
       );
 
       // Update the file

@@ -1,4 +1,3 @@
-// src/index.js
 import 'dotenv/config';
 import fastify from 'fastify';
 import { Webhooks } from '@octokit/webhooks';
@@ -9,7 +8,6 @@ import NibbleService from './services/nibbleService.js';
 
 const port = process.env.PORT || 3000;
 
-// Initialize GitHub App Auth
 const appAuth = createAppAuth({
   appId: process.env.GITHUB_APP_ID,
   privateKey: readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH, 'utf8'),
@@ -39,9 +37,6 @@ webhooks.on('push', async ({ payload }) => {
   }
 });
 
-// Start the server
-const app = fastify({ logger: true });
-
 // Health check endpoint
 app.get('/', async (request, reply) => {
   return { 
@@ -52,18 +47,27 @@ app.get('/', async (request, reply) => {
 });
 
 // Webhook endpoint
-app.post('/webhooks', async (request, reply) => {
+fastify.post('/webhooks', {
+  config: {
+    rawBody: true
+  }
+}, async (request, reply) => {
   try {
+    const signature = request.headers['x-hub-signature-256'];
+    const event = request.headers['x-github-event'];
+    const id = request.headers['x-github-delivery'];
+    
     await webhooks.verifyAndReceive({
-      id: request.headers['x-github-delivery'],
-      name: request.headers['x-github-event'],
-      signature: request.headers['x-hub-signature-256'],
-      payload: JSON.stringify(request.body)
+      id,
+      name: event,
+      signature,
+      payload: request.rawBody
     });
-    return { success: true };
+    
+    reply.code(200).send('OK');
   } catch (error) {
-    reply.code(400);
-    return { error: error.message };
+    console.error('Webhook error:', error);
+    reply.code(400).send(`Webhook error: ${error.message}`);
   }
 });
 
@@ -74,9 +78,15 @@ app.post('/trigger-nibble/:owner/:repo', async (request, reply) => {
     const result = await nibbleService.performNibble(owner, repo);
     return { success: true, result };
   } catch (error) {
+    console.error('Error in manual trigger:', error);
     reply.code(500);
     return { error: error.message };
   }
+});
+
+app.get('/debug/installations', async (request, reply) => {
+  const installations = nibbleService.getInstallations();
+  return { installations };
 });
 
 // Schedule nightly nibbles (2 AM UTC)
@@ -84,6 +94,9 @@ cron.schedule('0 2 * * *', async () => {
   console.log('Running nightly nibble job...');
   await nibbleService.runNightlyNibbles();
 });
+
+// Start the server
+const app = fastify({ logger: true });
 
 const start = async () => {
   try {
