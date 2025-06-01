@@ -2,6 +2,7 @@ import 'dotenv/config';
 import fastify from 'fastify';
 import { Webhooks } from '@octokit/webhooks';
 import { createAppAuth } from '@octokit/auth-app';
+import { Octokit } from '@octokit/rest';
 import cron from 'node-cron';
 import { readFileSync } from 'fs';
 import NibbleService from './services/nibbleService.js';
