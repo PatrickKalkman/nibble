@@ -50,7 +50,7 @@ app.get('/', async (request, reply) => {
 });
 
 // Webhook endpoint
-fastify.post('/webhooks', {
+app.post('/webhooks', {
   config: {
     rawBody: true
   }
@@ -75,7 +75,7 @@ fastify.post('/webhooks', {
 });
 
 // Manual trigger endpoint (for testing)
-fastify.post('/trigger-nibble/:owner/:repo', async (request, reply) => {
+app.post('/trigger-nibble/:owner/:repo', async (request, reply) => {
   try {
     const { owner, repo } = request.params;
     const result = await nibbleService.performNibble(owner, repo);
