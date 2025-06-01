@@ -1,9 +1,11 @@
 import InstallationManager from './installationManager.js';
+import NibbleAI from './nibbleAI.js';
 
 class NibbleService {
   constructor(app) {
     this.app = app;
     this.installationManager = new InstallationManager(app);
+    this.ai = new NibbleAI(process.env.OPENAI_API_KEY);
   }
 
   async handleInstallation(installation) {
@@ -48,7 +50,6 @@ class NibbleService {
 
   async performNibble(owner, repo, octokit = null) {
     if (!octokit) {
-      // Find the installation for this repo
       const installation = this.installationManager.findInstallationForRepository(owner, repo);
       
       if (!installation) {
@@ -96,8 +97,8 @@ class NibbleService {
       sha: refData.object.sha
     });
 
-    // Find and apply improvement
-    const improvement = await this.findNibbleComments(octokit, owner, repo, defaultBranch);
+    // Find and analyze NIBBLE comments with AI
+    const improvement = await this.findAndAnalyzeNibble(octokit, owner, repo, defaultBranch);
     
     if (!improvement) {
       // Delete the branch if no improvement found
@@ -109,29 +110,30 @@ class NibbleService {
       return { skipped: true, reason: 'no_improvement_found' };
     }
 
-    // Apply the improvement
-    await this.applyImprovement(octokit, owner, repo, branchName, improvement);
+    // Apply the AI-suggested improvement
+    await this.applyAIImprovement(octokit, owner, repo, branchName, improvement);
 
     // Create pull request
     const pr = await octokit.pulls.create({
       owner,
       repo,
       title: `🍽️ Daily Nibble: ${improvement.title}`,
-      body: this.generatePRBody(improvement),
+      body: this.generateAIPRBody(improvement),
       head: branchName,
       base: defaultBranch
     });
 
-    console.log(`Created nibble PR #${pr.data.number} for ${owner}/${repo}`);
+    console.log(`Created AI nibble PR #${pr.data.number} for ${owner}/${repo}`);
     
     return {
       success: true,
       pr: pr.data.html_url,
-      improvement: improvement.title
+      improvement: improvement.title,
+      confidence: improvement.confidence
     };
   }
 
-  async findNibbleComments(octokit, owner, repo, branch) {
+  async findAndAnalyzeNibble(octokit, owner, repo, branch) {
     try {
       // Search for NIBBLE comments in the repository
       const searchResult = await octokit.search.code({
@@ -139,44 +141,21 @@ class NibbleService {
         per_page: 5
       });
 
-      if (searchResult.data.items.length > 0) {
-        // Take the first found NIBBLE comment
-        const nibbleItem = searchResult.data.items[0];
-        
-        // Get the full file content to analyze the NIBBLE comment
-        const fileContent = await octokit.repos.getContent({
-          owner,
-          repo,
-          path: nibbleItem.path,
-          ref: branch
-        });
+      if (searchResult.data.items.length === 0) {
+        console.log(`No NIBBLE comments found in ${owner}/${repo}`);
+        return null;
+      }
 
-        const content = Buffer.from(fileContent.data.content, 'base64').toString();
-        const lines = content.split('\n');
-        
-        // Find lines with NIBBLE comments
-        const nibbleLines = [];
-        lines.forEach((line, index) => {
-          if (line.includes('NIBBLE') && (line.trim().startsWith('#') || line.trim().startsWith('//'))) {
-            nibbleLines.push({
-              lineNumber: index + 1,
-              content: line,
-              commentType: line.trim().startsWith('#') ? '#' : '//'
-            });
+      // Process each found NIBBLE file until we get a good improvement
+      for (const nibbleItem of searchResult.data.items) {
+        try {
+          const improvement = await this.analyzeNibbleInFile(octokit, owner, repo, branch, nibbleItem);
+          if (improvement && improvement.confidence > 0.7) {
+            return improvement;
           }
-        });
-
-        if (nibbleLines.length > 0) {
-          const nibbleLine = nibbleLines[0]; // Use the first found NIBBLE
-          
-          return {
-            type: 'nibble_comment',
-            title: 'Add tracking to NIBBLE comment',
-            file: nibbleItem.path,
-            description: `Found NIBBLE comment at line ${nibbleLine.lineNumber} in ${nibbleItem.path}`,
-            nibbleLine: nibbleLine,
-            fileSha: fileContent.data.sha
-          };
+        } catch (error) {
+          console.error(`Error analyzing NIBBLE in ${nibbleItem.path}:`, error.message);
+          continue;
         }
       }
 
@@ -187,76 +166,108 @@ class NibbleService {
     }
   }
 
-  async applyImprovement(octokit, owner, repo, branch, improvement) {
-    if (improvement.type === 'nibble_comment') {
-      // Get the file content
-      const fileResult = await octokit.repos.getContent({
-        owner,
-        repo,
-        path: improvement.file,
-        ref: branch
-      });
+  async analyzeNibbleInFile(octokit, owner, repo, branch, nibbleItem) {
+    // Get the full file content
+    const fileContent = await octokit.repos.getContent({
+      owner,
+      repo,
+      path: nibbleItem.path,
+      ref: branch
+    });
 
-      let content = Buffer.from(fileResult.data.content, 'base64').toString();
-      const lines = content.split('\n');
-      
-      // Find the NIBBLE comment and add our tracking comment
-      const currentDateTime = new Date().toISOString();
-      const commentPrefix = improvement.nibbleLine.commentType;
-      const trackingComment = `${commentPrefix} NIBBLE found it ${currentDateTime}`;
-      
-      // Find the line with the NIBBLE comment and add our tracking line after it
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i].includes('NIBBLE') && 
-            (lines[i].trim().startsWith('#') || lines[i].trim().startsWith('//'))) {
-          // Insert our tracking comment right after the NIBBLE line
-          lines.splice(i + 1, 0, trackingComment);
-          break;
-        }
-      }
+    const content = Buffer.from(fileContent.data.content, 'base64').toString();
+    const lines = content.split('\n');
+    
+    // Find the first NIBBLE comment line
+    const nibbleLineIndex = lines.findIndex(line => 
+      line.includes('NIBBLE') && (line.trim().startsWith('#') || line.trim().startsWith('//'))
+    );
 
-      // Reconstruct the file content
-      const newContent = lines.join('\n');
-
-      // Update the file
-      await octokit.repos.createOrUpdateFileContents({
-        owner,
-        repo,
-        path: improvement.file,
-        message: `🍽️ Nibble: ${improvement.title}`,
-        content: Buffer.from(newContent).toString('base64'),
-        branch,
-        sha: fileResult.data.sha
-      });
-
-      console.log(`Successfully added tracking comment to ${improvement.file}`);
+    if (nibbleLineIndex === -1) {
+      return null;
     }
+
+    // Extract context around the NIBBLE
+    const context = this.ai.extractContext(content, nibbleLineIndex);
+    const language = this.ai.detectLanguage(nibbleItem.path);
+
+    // Analyze with AI
+    const improvement = await this.ai.analyzeNibble({
+      file: nibbleItem.path,
+      nibbleComment: context.nibbleComment,
+      surroundingCode: context.surroundingCode,
+      language: language
+    });
+
+    if (!improvement) {
+      return null;
+    }
+
+    // Validate that the search text exists in the file
+    if (!this.ai.validateSearchText(content, improvement.searchText)) {
+      console.log(`Search text validation failed for ${nibbleItem.path}`);
+      return null;
+    }
+
+    // Add file metadata
+    return {
+      ...improvement,
+      fileSha: fileContent.data.sha,
+      fullContent: content
+    };
   }
 
-  generatePRBody(improvement) {
+  async applyAIImprovement(octokit, owner, repo, branch, improvement) {
+    console.log(`Applying AI improvement: ${improvement.title}`);
+    
+    // Apply the search and replace
+    const newContent = improvement.fullContent.replace(
+      improvement.searchText,
+      improvement.replaceText
+    );
+
+    // Update the file
+    await octokit.repos.createOrUpdateFileContents({
+      owner,
+      repo,
+      path: improvement.file,
+      message: `🍽️ Nibble: ${improvement.title}`,
+      content: Buffer.from(newContent).toString('base64'),
+      branch,
+      sha: improvement.fileSha
+    });
+
+    console.log(`Successfully applied AI improvement to ${improvement.file}`);
+  }
+
+  generateAIPRBody(improvement) {
     return `## 🍽️ Daily Nibble
 
-**Small improvement made:** ${improvement.title}
+**AI-suggested improvement:** ${improvement.title}
 
 ### What changed?
-${improvement.description}
+${improvement.explanation}
 
-Added a tracking comment to show that Nibble has found and processed this NIBBLE comment.
+**Original NIBBLE comment:** \`${improvement.originalNibble}\`
 
 ### Why this matters
-This demonstrates that Nibble can successfully:
-- Find NIBBLE comments in your codebase
-- Make actual changes to source files
-- Create meaningful pull requests with real modifications
+${improvement.explanation}
+
+This small improvement was suggested by AI analysis and addresses the specific concern mentioned in the NIBBLE comment.
 
 ### Review notes
-- This is an automated improvement from Nibble
-- The change adds a timestamped comment to track NIBBLE processing
-- Review should take less than 2 minutes
-- Safe to merge if the change looks reasonable
+- This change was generated by AI analysis of the NIBBLE comment
+- **Confidence level:** ${Math.round(improvement.confidence * 100)}%
+- The change is focused and preserves existing functionality
+- Review should take less than 5 minutes
+- Safe to merge if the improvement looks reasonable
+
+### Technical details
+- **File modified:** \`${improvement.file}\`
+- **Language:** ${improvement.language}
 
 ---
-*This PR was created by Nibble - making your code slightly better, one bite at a time* 🤖`;
+*This PR was created by Nibble AI - making your code slightly better with artificial intelligence, one bite at a time* 🤖✨`;
   }
 
   sleep(ms) {
