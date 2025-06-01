@@ -11,6 +11,7 @@
     "@octokit/rest": "^22.0.0",
     "@octokit/webhooks": "^14.0.0",
     "dotenv": "^16.5.0",
+    "fastify": "^4.28.1",
     "node-cron": "^4.1.0",
     "simple-git": "^3.27.0"
   },
