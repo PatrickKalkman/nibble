@@ -21,6 +21,9 @@ const webhooks = new Webhooks({
 // Initialize our Nibble service
 const nibbleService = new NibbleService(appAuth);
 
+// Start the Fastify server
+const app = fastify({ logger: true });
+
 // Webhook handlers
 webhooks.on('installation.created', async ({ payload }) => {
   console.log(`Nibble installed on ${payload.installation.account.login}`);
@@ -95,8 +98,6 @@ cron.schedule('0 2 * * *', async () => {
   await nibbleService.runNightlyNibbles();
 });
 
-// Start the server
-const app = fastify({ logger: true });
 
 const start = async () => {
   try {
