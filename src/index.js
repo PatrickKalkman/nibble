@@ -79,21 +79,20 @@ app.get('/', async (request, reply) => {
 });
 
 // Webhook endpoint
-app.post('/webhooks', {
-  config: {
-    rawBody: true
-  }
-}, async (request, reply) => {
+app.post('/webhooks', async (request, reply) => {
   try {
     const signature = request.headers['x-hub-signature-256'];
     const event = request.headers['x-github-event'];
     const id = request.headers['x-github-delivery'];
     
+    // Get raw body as string
+    const payload = JSON.stringify(request.body);
+    
     await webhooks.verifyAndReceive({
       id,
       name: event,
       signature,
-      payload: request.rawBody
+      payload
     });
     
     reply.code(200).send('OK');
