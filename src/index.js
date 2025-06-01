@@ -75,7 +75,7 @@ fastify.post('/webhooks', {
 });
 
 // Manual trigger endpoint (for testing)
-app.post('/trigger-nibble/:owner/:repo', async (request, reply) => {
+fastify.post('/trigger-nibble/:owner/:repo', async (request, reply) => {
   try {
     const { owner, repo } = request.params;
     const result = await nibbleService.performNibble(owner, repo);
