@@ -16,6 +16,7 @@
     "fastify": "^5.3.3",
     "node-cron": "^4.1.0",
     "openai": "^5.0.1",
+    "pino": "^9.7.0",
     "simple-git": "^3.27.0"
   },
   "keywords": [
