@@ -132,26 +132,26 @@ class NibbleService {
   }
 
   async findSimpleImprovement(octokit, owner, repo, branch) {
-    // For now, let's implement a simple TODO finder
+    // For now, let's implement a simple NIBBLE finder
     // Later we'll replace this with AI analysis
     
     try {
-      // Search for TODO comments
+      // Search for NIBBLE comments
       const searchResult = await octokit.search.code({
-        q: `TODO repo:${owner}/${repo}`,
+        q: `NIBBLE repo:${owner}/${repo}`,
         per_page: 10
       });
 
       if (searchResult.data.items.length > 0) {
-        const todoItem = searchResult.data.items[0];
+        const nibbleItem = searchResult.data.items[0];
         
         return {
-          type: 'todo_comment',
-          title: 'Address TODO comment',
-          file: todoItem.path,
-          description: `Found TODO comment in ${todoItem.path}`,
+          type: 'nibble_comment',
+          title: 'Address NIBBLE comment',
+          file: nibbleItem.path,
+          description: `Found NIBBLE comment in ${nibbleItem.path}`,
           action: 'add_comment',
-          details: 'Added implementation note for TODO item'
+          details: 'Added implementation note for NIBBLE item'
         };
       }
 
@@ -187,7 +187,7 @@ class NibbleService {
   }
 
   async applyImprovement(octokit, owner, repo, branch, improvement) {
-    if (improvement.type === 'todo_comment') {
+    if (improvement.type === 'nibble_comment') {
       // Get the file content
       const fileResult = await octokit.repos.getContent({
         owner,
@@ -198,10 +198,10 @@ class NibbleService {
 
       let content = Buffer.from(fileResult.data.content, 'base64').toString();
       
-      // Simple improvement: add a comment after TODO
+      // Simple improvement: add a comment after NIBBLE
       content = content.replace(
-        /\/\/\s*TODO:/g, 
-        '// TODO: (Nibble note: Consider implementing this soon)\n// TODO:'
+        /\/\/\s*NIBBLE:/g, 
+        '// NIBBLE: (Nibble note: Consider implementing this soon)\n// NIBBLE:'
       );
 
       // Update the file
