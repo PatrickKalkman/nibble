@@ -19,11 +19,18 @@ const appAuth = createAppAuth({
 
 const appAdapter = {
   // ── JWT-scoped Octokit ─────────────────────────────────────────────
-  async auth() {
-    return new Octokit({
-      authStrategy: createAppAuth,
-      auth: { appId, privateKey }
-    });
+  async auth(installationId = null) {
+    if (installationId) {
+      return new Octokit({
+        authStrategy: createAppAuth,
+        auth: { appId, privateKey, installationId }
+      });
+    } else {
+      return new Octokit({
+        authStrategy: createAppAuth,
+        auth: { appId, privateKey }
+      });
+    }
   },
 
   // ── Installation-scoped Octokit ────────────────────────────────────
