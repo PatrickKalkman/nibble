@@ -4,8 +4,8 @@ import { promises as fs } from 'fs';
 import path from 'path';
 
 class NibbleService {
-  constructor(app) {
-    this.app = app;
+  constructor(appAuth) {
+    this.appAuth = appAuth;
     this.installations = new Map(); // In production, use a proper database
   }
 
@@ -46,7 +46,8 @@ class NibbleService {
       if (!data.enabled) continue;
       
       try {
-        const octokit = await this.app.getInstallationOctokit(installationId);
+        const auth = await this.appAuth({ type: "installation", installationId });
+        const octokit = new Octokit({ auth });
         
         for (const repo of data.repositories || []) {
           try {
@@ -72,7 +73,8 @@ class NibbleService {
         throw new Error(`No installation found for ${owner}/${repo}`);
       }
       
-      octokit = await this.app.getInstallationOctokit(installation.id);
+      const auth = await this.appAuth({ type: "installation", installationId: installation.id });
+      octokit = new Octokit({ auth });
     }
 
     console.log(`Performing nibble on ${owner}/${repo}`);

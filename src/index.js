@@ -21,7 +21,7 @@ const webhooks = new Webhooks({
 });
 
 // Initialize our Nibble service
-const nibbleService = new NibbleService(githubApp);
+const nibbleService = new NibbleService(appAuth);
 
 // Webhook handlers
 webhooks.on('installation.created', async ({ payload }) => {
@@ -38,6 +38,9 @@ webhooks.on('push', async ({ payload }) => {
     await nibbleService.scheduleDailyNibble(payload.repository, payload.installation);
   }
 });
+
+// Start the server
+const app = fastify({ logger: true });
 
 // Health check endpoint
 app.get('/', async (request, reply) => {
@@ -81,9 +84,6 @@ cron.schedule('0 2 * * *', async () => {
   console.log('Running nightly nibble job...');
   await nibbleService.runNightlyNibbles();
 });
-
-// Start the server
-const app = fastify({ logger: true });
 
 const start = async () => {
   try {
