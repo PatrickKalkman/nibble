@@ -26,6 +26,7 @@
   "license": "MIT",
   "devDependencies": {
     "jest": "^29.7.0",
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.10",
+    "pino-pretty": "^13.0.0"
   }
 }
