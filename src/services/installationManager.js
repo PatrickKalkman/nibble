@@ -1,6 +1,9 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import pino from 'pino';
+
+const logger = pino();
 
 class InstallationManager {
   constructor(app) {
@@ -26,12 +29,12 @@ class InstallationManager {
         this.installations.set(installation.id, installation);
       }
       
-      console.log(`Loaded ${installations.length} installations from disk`);
+      logger.info(`Loaded ${installations.length} installations from disk`);
     } catch (error) {
       if (error.code !== 'ENOENT') {
-        console.error('Error loading installations:', error.message);
+        logger.error('Error loading installations:', error.message);
       } else {
-        console.log('No existing installations file found, starting fresh');
+        logger.info('No existing installations file found, starting fresh');
       }
     }
   }
@@ -40,9 +43,9 @@ class InstallationManager {
     try {
       const installations = Array.from(this.installations.values());
       await fs.writeFile(this.installationsFile, JSON.stringify(installations, null, 2));
-      console.log(`Saved ${installations.length} installations to disk`);
+      logger.info(`Saved ${installations.length} installations to disk`);
     } catch (error) {
-      console.error('Error saving installations:', error.message);
+      logger.error('Error saving installations:', error.message);
     }
   }
 
@@ -69,13 +72,13 @@ class InstallationManager {
 
     this.installations.set(installation.id, installationData);
     await this.saveInstallations(); // Persist to disk
-    console.log(`Stored installation ${installation.id} for ${installation.account.login} with ${installationData.repositories.length} repositories`);
+    logger.info(`Stored installation ${installation.id} for ${installation.account.login} with ${installationData.repositories.length} repositories`);
   }
 
   async addRepositoryToInstallation(repository, installation) {
     const installationData = this.installations.get(installation.id);
     if (!installationData) {
-      console.log(`Installation ${installation.id} not found, creating new entry`);
+      logger.info(`Installation ${installation.id} not found, creating new entry`);
       await this.handleInstallation(installation);
       return;
     }
@@ -96,12 +99,12 @@ class InstallationManager {
       await this.saveInstallations(); // Persist changes
     }
     
-    console.log(`Added ${repository.full_name} to installation ${installation.id}`);
+    logger.info(`Added ${repository.full_name} to installation ${installation.id}`);
   }
 
   async refreshInstallationsFromGitHub() {
     try {
-      console.log('Refreshing installations…');
+      logger.info('Refreshing installations…');
   
       // 1. App-level Octokit (JWT) – no extra imports.
       const appOctokit = await this.app.auth();   // ← already authenticated
@@ -139,11 +142,11 @@ class InstallationManager {
       }
   
       await this.saveInstallations();
-      console.log(`Refreshed ${this.installations.size} installations`);
+      logger.info(`Refreshed ${this.installations.size} installations`);
       return this.installations.size;
   
     } catch (err) {
-      console.error('refreshInstallationsFromGitHub failed:', err);
+      logger.error('refreshInstallationsFromGitHub failed:', err);
       throw err;
     }
   }
