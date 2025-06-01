@@ -1,7 +1,7 @@
-const { Octokit } = require('@octokit/rest');
-const simpleGit = require('simple-git');
-const fs = require('fs').promises;
-const path = require('path');
+import { Octokit } from '@octokit/rest';
+import simpleGit from 'simple-git';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 class NibbleService {
   constructor(app) {
@@ -300,4 +300,4 @@ Every small improvement compounds over time. This nibble addresses a minor issue
   }
 }
 
-module.exports = NibbleService;
+export default NibbleService;

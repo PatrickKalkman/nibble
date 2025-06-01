@@ -1,17 +1,18 @@
 // src/index.js
-require('dotenv').config();
-const fastify = require('fastify')({ logger: true });
-const { Webhooks } = require('@octokit/webhooks');
-const { App } = require('@octokit/app');
-const cron = require('node-cron');
-const NibbleService = require('./services/nibbleService');
+import 'dotenv/config';
+import fastify from 'fastify';
+import { Webhooks } from '@octokit/webhooks';
+import { App } from '@octokit/app';
+import cron from 'node-cron';
+import { readFileSync } from 'fs';
+import NibbleService from './services/nibbleService.js';
 
 const port = process.env.PORT || 3000;
 
 // Initialize GitHub App
 const githubApp = new App({
   appId: process.env.GITHUB_APP_ID,
-  privateKey: require('fs').readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH, 'utf8'),
+  privateKey: readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH, 'utf8'),
 });
 
 // Initialize webhooks
@@ -39,7 +40,7 @@ webhooks.on('push', async ({ payload }) => {
 });
 
 // Health check endpoint
-fastify.get('/', async (request, reply) => {
+app.get('/', async (request, reply) => {
   return { 
     status: 'Nibble is ready to improve your code!',
     version: '1.0.0',
@@ -48,7 +49,7 @@ fastify.get('/', async (request, reply) => {
 });
 
 // Webhook endpoint
-fastify.post('/webhooks', async (request, reply) => {
+app.post('/webhooks', async (request, reply) => {
   try {
     await webhooks.verifyAndReceive({
       id: request.headers['x-github-delivery'],
@@ -64,7 +65,7 @@ fastify.post('/webhooks', async (request, reply) => {
 });
 
 // Manual trigger endpoint (for testing)
-fastify.post('/trigger-nibble/:owner/:repo', async (request, reply) => {
+app.post('/trigger-nibble/:owner/:repo', async (request, reply) => {
   try {
     const { owner, repo } = request.params;
     const result = await nibbleService.performNibble(owner, repo);
@@ -82,13 +83,15 @@ cron.schedule('0 2 * * *', async () => {
 });
 
 // Start the server
+const app = fastify({ logger: true });
+
 const start = async () => {
   try {
-    await fastify.listen({ port, host: '0.0.0.0' });
+    await app.listen({ port, host: '0.0.0.0' });
     console.log(`Nibble GitHub App listening on port ${port}`);
     console.log('Ready to make your code slightly better, one bite at a time! 🍽️');
   } catch (err) {
-    fastify.log.error(err);
+    app.log.error(err);
     process.exit(1);
   }
 };
