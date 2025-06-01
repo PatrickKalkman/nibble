@@ -2,15 +2,15 @@
 import 'dotenv/config';
 import fastify from 'fastify';
 import { Webhooks } from '@octokit/webhooks';
-import { App } from '@octokit/app';
+import { createAppAuth } from '@octokit/auth-app';
 import cron from 'node-cron';
 import { readFileSync } from 'fs';
 import NibbleService from './services/nibbleService.js';
 
 const port = process.env.PORT || 3000;
 
-// Initialize GitHub App
-const githubApp = new App({
+// Initialize GitHub App Auth
+const appAuth = createAppAuth({
   appId: process.env.GITHUB_APP_ID,
   privateKey: readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH, 'utf8'),
 });
