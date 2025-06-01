@@ -4,7 +4,8 @@
   "description": "AI that improves your code one bite at a time",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon src/index.js"
   },
   "dependencies": {
     "@octokit/auth-app": "^8.0.1",
