@@ -1,10 +1,13 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 class NibbleService {
   constructor(app) {
     this.app = app;
     this.installations = new Map();
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
     this.installationsFile = path.join(__dirname, '../../data/installations.json');
     this.loadInstallations(); // Load on startup
   }
