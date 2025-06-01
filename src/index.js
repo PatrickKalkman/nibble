@@ -8,10 +8,31 @@ import NibbleService from './services/nibbleService.js';
 
 const port = process.env.PORT || 3000;
 
+const appId      = process.env.GITHUB_APP_ID;
+const privateKey = readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH, 'utf8');
+
 const appAuth = createAppAuth({
   appId: process.env.GITHUB_APP_ID,
   privateKey: readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH, 'utf8'),
 });
+
+const appAdapter = {
+  // ── JWT-scoped Octokit ─────────────────────────────────────────────
+  async auth() {
+    return new Octokit({
+      authStrategy: createAppAuth,
+      auth: { appId, privateKey }
+    });
+  },
+
+  // ── Installation-scoped Octokit ────────────────────────────────────
+  async getInstallationOctokit(installationId) {
+    return new Octokit({
+      authStrategy: createAppAuth,
+      auth: { appId, privateKey, installationId }
+    });
+  }
+};
 
 // Initialize webhooks
 const webhooks = new Webhooks({
@@ -19,7 +40,7 @@ const webhooks = new Webhooks({
 });
 
 // Initialize our Nibble service
-const nibbleService = new NibbleService(appAuth);
+const nibbleService = new NibbleService(appAdapter);
 
 // Start the Fastify server
 const app = fastify({ logger: true });
@@ -82,6 +103,16 @@ app.post('/trigger-nibble/:owner/:repo', async (request, reply) => {
     return { success: true, result };
   } catch (error) {
     console.error('Error in manual trigger:', error);
+    reply.code(500);
+    return { error: error.message };
+  }
+});
+
+app.post('/debug/refresh-installations', async (request, reply) => {
+  try {
+    const count = await nibbleService.refreshInstallationsFromGitHub();
+    return { success: true, message: `Refreshed ${count} installations` };
+  } catch (error) {
     reply.code(500);
     return { error: error.message };
   }

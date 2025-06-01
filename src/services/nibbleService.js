@@ -102,42 +102,55 @@ class NibbleService {
 
   async refreshInstallationsFromGitHub() {
     try {
-      console.log('Fetching installations from GitHub API...');
-      
-      // Get all installations for this app
-      const installations = await this.app.octokit.rest.apps.listInstallations();
-      
-      for (const installation of installations.data) {
-        // Get repositories for each installation
-        const installationOctokit = await this.app.getInstallationOctokit(installation.id);
-        const repos = await installationOctokit.rest.apps.listReposAccessibleToInstallation();
-        
-        const installationData = {
-          id: installation.id,
-          account: installation.account.login,
-          repositories: repos.data.repositories.map(repo => ({
-            id: repo.id,
-            full_name: repo.full_name,
-            default_branch: repo.default_branch,
-            language: repo.language
+      console.log('Refreshing installations…');
+  
+      // 1. App-level Octokit (JWT) – no extra imports.
+      const appOctokit = await this.app.auth();   // ← already authenticated
+  
+      // 2. Pull *all* installations (100 per page).
+      const installations = await appOctokit.paginate(
+        appOctokit.apps.listInstallations,
+        { per_page: 100 }
+      );
+  
+      for (const inst of installations) {
+        // 3. Installation-scoped Octokit (access token).
+        const instOctokit = await this.app.auth(inst.id);
+  
+        // 4. Fetch every repo the app can reach.
+        const repos = await instOctokit.paginate(
+          instOctokit.apps.listReposAccessibleToInstallation,
+          { per_page: 100 }
+        );
+  
+        this.installations.set(inst.id, {
+          id:         inst.id,
+          account:    inst.account?.login ?? inst.account?.slug,
+          repositories: repos.map(r => ({
+            id: r.id,
+            full_name: r.full_name,
+            default_branch: r.default_branch,
+            language: r.language
           })),
           lastNibble: null,
-          enabled: true,
-          createdAt: installation.created_at,
-          updatedAt: new Date().toISOString()
-        };
-        
-        this.installations.set(installation.id, installationData);
+          enabled:    true,
+          createdAt:  inst.created_at,
+          updatedAt:  new Date().toISOString()
+        });
       }
-      
+  
       await this.saveInstallations();
-      console.log(`Refreshed ${installations.data.length} installations from GitHub`);
-      
-      return installations.data.length;
-    } catch (error) {
-      console.error('Error refreshing installations:', error.message);
-      throw error;
+      console.log(`Refreshed ${this.installations.size} installations`);
+      return this.installations.size;
+  
+    } catch (err) {
+      console.error('refreshInstallationsFromGitHub failed:', err);
+      throw err;
     }
+  }
+    
+  getInstallations() {
+    return Array.from(this.installations.entries()).map(([id, data]) => ({ id, ...data }));
   }
 
   async runNightlyNibbles() {
