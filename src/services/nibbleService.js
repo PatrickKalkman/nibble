@@ -1,11 +1,13 @@
 import InstallationManager from './installationManager.js';
 import NibbleAI from './nibbleAI.js';
+import pino from 'pino';
 
 class NibbleService {
   constructor(app) {
     this.app = app;
     this.installationManager = new InstallationManager(app);
     this.ai = new NibbleAI(process.env.OPENAI_API_KEY);
+    this.logger = pino();
   }
 
   async handleInstallation(installation) {
@@ -14,7 +16,7 @@ class NibbleService {
 
   async scheduleDailyNibble(repository, installation) {
     await this.installationManager.addRepositoryToInstallation(repository, installation);
-    console.log(`Scheduled ${repository.full_name} for daily nibbles`);
+    this.logger.info(`Scheduled ${repository.full_name} for daily nibbles`);
   }
 
   async refreshInstallationsFromGitHub() {
@@ -26,7 +28,7 @@ class NibbleService {
   }
 
   async runNightlyNibbles() {
-    console.log('Starting nightly nibble run...');
+    this.logger.info('Starting nightly nibble run...');
     
     const enabledInstallations = this.installationManager.getAllEnabledInstallations();
     
@@ -39,11 +41,11 @@ class NibbleService {
             await this.performNibble(repo.full_name.split('/')[0], repo.full_name.split('/')[1], octokit);
             await this.sleep(5000); // Rate limiting - wait 5s between repos
           } catch (error) {
-            console.error(`Error nibbling ${repo.full_name}:`, error.message);
+            this.logger.error(`Error nibbling ${repo.full_name}:`, error.message);
           }
         }
       } catch (error) {
-        console.error(`Error processing installation ${installation.id}:`, error.message);
+        this.logger.error(`Error processing installation ${installation.id}:`, error.message);
       }
     }
   }
@@ -56,11 +58,11 @@ class NibbleService {
         throw new Error(`No installation found for ${owner}/${repo}. Make sure the app is installed on this repository.`);
       }
       
-      console.log(`Using installation ${installation.id} for ${owner}/${repo}`);
+      this.logger.info(`Using installation ${installation.id} for ${owner}/${repo}`);
       octokit = await this.app.getInstallationOctokit(installation.id);
     }
 
-    console.log(`Performing nibble on ${owner}/${repo}`);
+    this.logger.info(`Performing nibble on ${owner}/${repo}`);
 
     // Check if there's already an open Nibble PR
     const existingPRs = await octokit.pulls.list({
@@ -71,7 +73,7 @@ class NibbleService {
     });
 
     if (existingPRs.data.length > 0) {
-      console.log(`Skipping ${owner}/${repo} - existing Nibble PR found`);
+      this.logger.info(`Skipping ${owner}/${repo} - existing Nibble PR found`);
       return { skipped: true, reason: 'existing_pr' };
     }
 
@@ -123,7 +125,7 @@ class NibbleService {
       base: defaultBranch
     });
 
-    console.log(`Created AI nibble PR #${pr.data.number} for ${owner}/${repo}`);
+    this.logger.info(`Created AI nibble PR #${pr.data.number} for ${owner}/${repo}`);
     
     return {
       success: true,
@@ -142,7 +144,7 @@ class NibbleService {
       });
 
       if (searchResult.data.items.length === 0) {
-        console.log(`No NIBBLE comments found in ${owner}/${repo}`);
+        this.logger.info(`No NIBBLE comments found in ${owner}/${repo}`);
         return null;
       }
 
@@ -154,14 +156,14 @@ class NibbleService {
             return improvement;
           }
         } catch (error) {
-          console.error(`Error analyzing NIBBLE in ${nibbleItem.path}:`, error.message);
+          this.logger.error(`Error analyzing NIBBLE in ${nibbleItem.path}:`, error.message);
           continue;
         }
       }
 
       return null;
     } catch (error) {
-      console.error('Error finding NIBBLE comments:', error.message);
+      this.logger.error('Error finding NIBBLE comments:', error.message);
       return null;
     }
   }
@@ -205,7 +207,7 @@ class NibbleService {
 
     // Validate that the search text exists in the file
     if (!this.ai.validateSearchText(content, improvement.searchText)) {
-      console.log(`Search text validation failed for ${nibbleItem.path}`);
+      this.logger.info(`Search text validation failed for ${nibbleItem.path}`);
       return null;
     }
 
@@ -218,7 +220,7 @@ class NibbleService {
   }
 
   async applyAIImprovement(octokit, owner, repo, branch, improvement) {
-    console.log(`Applying AI improvement: ${improvement.title}`);
+    this.logger.info(`Applying AI improvement: ${improvement.title}`);
     
     // Apply the search and replace
     let newContent = improvement.fullContent.replace(
@@ -240,7 +242,7 @@ class NibbleService {
       sha: improvement.fileSha
     });
 
-    console.log(`Successfully applied AI improvement and removed NIBBLE comment from ${improvement.file}`);
+    this.logger.info(`Successfully applied AI improvement and removed NIBBLE comment from ${improvement.file}`);
   }
 
   removeNibbleComment(content, nibbleComment) {
