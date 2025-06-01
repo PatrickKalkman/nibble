@@ -147,3 +147,4 @@ dist
 *.pub
 
 .aider*
+data/installations.json
