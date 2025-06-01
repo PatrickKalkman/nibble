@@ -1,9 +1,11 @@
 // services/nibbleAI.js
 import OpenAI from 'openai';
+import pino from 'pino';
 
 class NibbleAI {
   constructor(apiKey) {
     this.openai = new OpenAI({ apiKey });
+    this.logger = pino();
   }
 
   /**
@@ -39,7 +41,7 @@ class NibbleAI {
       return this.parseResponse(result, nibbleContext);
 
     } catch (error) {
-      console.error('Error analyzing NIBBLE:', error.message);
+      this.logger.error('Error analyzing NIBBLE:', error.message);
       return null;
     }
   }
@@ -179,8 +181,8 @@ Always respond in valid JSON format.`;
       };
 
     } catch (error) {
-      console.error('Error parsing AI response:', error.message);
-      console.error('Raw response:', responseText);
+      this.logger.error('Error parsing AI response:', error.message);
+      this.logger.error('Raw response:', responseText);
       return null;
     }
   }
