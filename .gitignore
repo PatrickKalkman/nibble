@@ -146,3 +146,4 @@ dist
 # Public keys
 *.pub
 
+.aider*
