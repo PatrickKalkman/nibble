@@ -96,8 +96,8 @@ class NibbleService {
       sha: refData.object.sha
     });
 
-    // For now, let's create a simple improvement (we'll replace this with AI later)
-    const improvement = await this.findSimpleImprovement(octokit, owner, repo, defaultBranch);
+    // Find and apply improvement
+    const improvement = await this.findNibbleComments(octokit, owner, repo, defaultBranch);
     
     if (!improvement) {
       // Delete the branch if no improvement found
@@ -131,57 +131,58 @@ class NibbleService {
     };
   }
 
-  async findSimpleImprovement(octokit, owner, repo, branch) {
-    // For now, let's implement a simple NIBBLE finder
-    // Later we'll replace this with AI analysis
-    
+  async findNibbleComments(octokit, owner, repo, branch) {
     try {
-      // Search for NIBBLE comments
+      // Search for NIBBLE comments in the repository
       const searchResult = await octokit.search.code({
         q: `NIBBLE repo:${owner}/${repo}`,
-        per_page: 10
+        per_page: 5
       });
 
       if (searchResult.data.items.length > 0) {
+        // Take the first found NIBBLE comment
         const nibbleItem = searchResult.data.items[0];
         
-        return {
-          type: 'nibble_comment',
-          title: 'Address NIBBLE comment',
-          file: nibbleItem.path,
-          description: `Found NIBBLE comment in ${nibbleItem.path}`,
-          action: 'add_comment',
-          details: 'Added implementation note for NIBBLE item'
-        };
-      }
-
-      // Look for README improvements
-      try {
-        const readmeResult = await octokit.repos.getContent({
+        // Get the full file content to analyze the NIBBLE comment
+        const fileContent = await octokit.repos.getContent({
           owner,
           repo,
-          path: 'README.md'
+          path: nibbleItem.path,
+          ref: branch
         });
 
-        const readmeContent = Buffer.from(readmeResult.data.content, 'base64').toString();
+        const content = Buffer.from(fileContent.data.content, 'base64').toString();
+        const lines = content.split('\n');
         
-        if (!readmeContent.includes('## Installation')) {
+        // Find lines with NIBBLE comments
+        const nibbleLines = [];
+        lines.forEach((line, index) => {
+          if (line.includes('NIBBLE') && (line.trim().startsWith('#') || line.trim().startsWith('//'))) {
+            nibbleLines.push({
+              lineNumber: index + 1,
+              content: line,
+              commentType: line.trim().startsWith('#') ? '#' : '//'
+            });
+          }
+        });
+
+        if (nibbleLines.length > 0) {
+          const nibbleLine = nibbleLines[0]; // Use the first found NIBBLE
+          
           return {
-            type: 'readme_improvement',
-            title: 'Add Installation section to README',
-            file: 'README.md',
-            description: 'README missing installation instructions',
-            action: 'add_section',
-            details: 'Added basic installation section to README'
+            type: 'nibble_comment',
+            title: 'Add tracking to NIBBLE comment',
+            file: nibbleItem.path,
+            description: `Found NIBBLE comment at line ${nibbleLine.lineNumber} in ${nibbleItem.path}`,
+            nibbleLine: nibbleLine,
+            fileSha: fileContent.data.sha
           };
         }
-      } catch (error) {
-        // README doesn't exist or not accessible
       }
 
       return null;
     } catch (error) {
-      console.error('Error finding improvement:', error.message);
+      console.error('Error finding NIBBLE comments:', error.message);
       return null;
     }
   }
@@ -197,12 +198,25 @@ class NibbleService {
       });
 
       let content = Buffer.from(fileResult.data.content, 'base64').toString();
+      const lines = content.split('\n');
       
-      // Simple improvement: add a comment after NIBBLE
-      content = content.replace(
-        /\/\/\s*NIBBLE:/g, 
-        '// NIBBLE: (Nibble note: Consider implementing this soon)\n// NIBBLE:'
-      );
+      // Find the NIBBLE comment and add our tracking comment
+      const currentDateTime = new Date().toISOString();
+      const commentPrefix = improvement.nibbleLine.commentType;
+      const trackingComment = `${commentPrefix} NIBBLE found it ${currentDateTime}`;
+      
+      // Find the line with the NIBBLE comment and add our tracking line after it
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes('NIBBLE') && 
+            (lines[i].trim().startsWith('#') || lines[i].trim().startsWith('//'))) {
+          // Insert our tracking comment right after the NIBBLE line
+          lines.splice(i + 1, 0, trackingComment);
+          break;
+        }
+      }
+
+      // Reconstruct the file content
+      const newContent = lines.join('\n');
 
       // Update the file
       await octokit.repos.createOrUpdateFileContents({
@@ -210,51 +224,12 @@ class NibbleService {
         repo,
         path: improvement.file,
         message: `🍽️ Nibble: ${improvement.title}`,
-        content: Buffer.from(content).toString('base64'),
+        content: Buffer.from(newContent).toString('base64'),
         branch,
         sha: fileResult.data.sha
       });
-    } else if (improvement.type === 'readme_improvement') {
-      // Get README content
-      const readmeResult = await octokit.repos.getContent({
-        owner,
-        repo,
-        path: 'README.md',
-        ref: branch
-      });
 
-      let content = Buffer.from(readmeResult.data.content, 'base64').toString();
-      
-      // Add installation section
-      const installationSection = `
-
-## Installation
-
-\`\`\`bash
-# Clone the repository
-git clone https://github.com/${owner}/${repo}.git
-cd ${repo}
-
-# Install dependencies
-npm install
-
-# Run the project
-npm start
-\`\`\`
-`;
-
-      content += installationSection;
-
-      // Update README
-      await octokit.repos.createOrUpdateFileContents({
-        owner,
-        repo,
-        path: 'README.md',
-        message: `🍽️ Nibble: ${improvement.title}`,
-        content: Buffer.from(content).toString('base64'),
-        branch,
-        sha: readmeResult.data.sha
-      });
+      console.log(`Successfully added tracking comment to ${improvement.file}`);
     }
   }
 
@@ -266,12 +241,17 @@ npm start
 ### What changed?
 ${improvement.description}
 
+Added a tracking comment to show that Nibble has found and processed this NIBBLE comment.
+
 ### Why this matters
-Every small improvement compounds over time. This nibble addresses a minor issue that makes the codebase slightly better for future developers.
+This demonstrates that Nibble can successfully:
+- Find NIBBLE comments in your codebase
+- Make actual changes to source files
+- Create meaningful pull requests with real modifications
 
 ### Review notes
 - This is an automated improvement from Nibble
-- The change is intentionally small and focused
+- The change adds a timestamped comment to track NIBBLE processing
 - Review should take less than 2 minutes
 - Safe to merge if the change looks reasonable
 
