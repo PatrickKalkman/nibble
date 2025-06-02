@@ -82,7 +82,7 @@ class NibbleService {
     const defaultBranch = repoInfo.data.default_branch;
 
     // Create a new branch
-    const branchName = `nibble/daily-improvement-${new Date().toISOString().split('T')[0]}`;
+    const branchName = `nibble/daily-improvement-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)}`;
     
     // Get the latest commit SHA from default branch
     const { data: refData } = await octokit.git.getRef({
