@@ -1,4 +1,3 @@
-// src/middleware/auth.js
 import crypto from 'crypto';
 import pino from 'pino';
 
