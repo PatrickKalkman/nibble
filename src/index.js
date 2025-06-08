@@ -95,6 +95,51 @@ webhooks.on('push', async ({ payload }) => {
   }
 });
 
+app.post('/deploy', 
+  { preHandler: [requireAuth, ipAllowlist].filter(Boolean) },
+  async (request, reply) => {
+    try {
+      const { ref, repository } = request.body;
+      
+      // Only deploy on main branch pushes to YOUR nibble repo
+      if (repository?.full_name !== 'YOUR_GITHUB_USERNAME/nibble' || 
+          ref !== 'refs/heads/main') {
+        return { status: 'ignored', reason: 'not main branch or not nibble repo' };
+      }
+      
+      logger.info('Deploying new version...');
+      
+      // Execute deployment script
+      const { exec } = await import('child_process');
+      const util = await import('util');
+      const execPromise = util.promisify(exec);
+      
+      try {
+        // Run your deployment script
+        const { stdout, stderr } = await execPromise('/home/ubuntu/nibble/deploy.sh');
+        logger.info('Deploy output:', stdout);
+        if (stderr) logger.error('Deploy errors:', stderr);
+        
+        return { 
+          status: 'success', 
+          message: 'Deployment initiated',
+          output: stdout.slice(-500) // Last 500 chars
+        };
+      } catch (error) {
+        logger.error('Deployment failed:', error);
+        return reply.code(500).send({ 
+          status: 'failed', 
+          error: error.message 
+        });
+      }
+      
+    } catch (error) {
+      logger.error('Deploy endpoint error:', error);
+      return reply.code(500).send({ error: error.message });
+    }
+  }
+);
+
 // Health check endpoint
 app.get('/', async (request, reply) => {
   return { 
