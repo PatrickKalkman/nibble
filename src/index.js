@@ -6,6 +6,7 @@ import { Octokit } from '@octokit/rest';
 import cron from 'node-cron';
 import { readFileSync } from 'fs';
 import pino from 'pino';
+import crypto from 'crypto';
 import NibbleService from './services/nibbleService.js';
 import { 
   createAuthMiddleware, 
