@@ -102,8 +102,8 @@ app.post('/deploy',
       
       // Only deploy on main branch pushes to YOUR nibble repo
       if (repository?.full_name !== 'PatrickKalkman/nibble' || 
-          ref !== 'refs/heads/main') {
-        return { status: 'ignored', reason: 'not main branch or not nibble repo' };
+          ref !== 'refs/heads/master') {
+        return { status: 'ignored', reason: 'not master branch or not nibble repo' };
       }
       
       logger.info('Deploying new version...');
