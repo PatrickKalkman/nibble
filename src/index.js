@@ -17,6 +17,7 @@ import {
 const logger = pino();
 
 const port = process.env.PORT || 3000;
+const host = process.env.HOST || '0.0.0.0';
 
 const appId      = process.env.GITHUB_APP_ID;
 const privateKey = readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH, 'utf8');
@@ -238,8 +239,8 @@ cron.schedule('0 2 * * *', async () => {
 
 const start = async () => {
   try {
-    await app.listen({ port, host: '0.0.0.0' });
-    logger.info(`Nibble GitHub App listening on port ${port}`);
+    await app.listen({ port, host });
+    logger.info(`Nibble GitHub App listening on host ${host} port ${port}`);
     logger.info('Ready to make your code slightly better, one bite at a time! 🍽️');
     
     // Security reminders
