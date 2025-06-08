@@ -96,13 +96,13 @@ webhooks.on('push', async ({ payload }) => {
 });
 
 app.post('/deploy', 
-  { preHandler: [requireAuth].filter(Boolean) },
+  { preHandler: [webhookAuth] },
   async (request, reply) => {
     try {
       const { ref, repository } = request.body;
       
       // Only deploy on main branch pushes to YOUR nibble repo
-      if (repository?.full_name !== 'YOUR_GITHUB_USERNAME/nibble' || 
+      if (repository?.full_name !== 'PatrickKalkman/nibble' || 
           ref !== 'refs/heads/main') {
         return { status: 'ignored', reason: 'not main branch or not nibble repo' };
       }
