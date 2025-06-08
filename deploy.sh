@@ -12,7 +12,7 @@ cd $APP_DIR
 
 # Pull latest changes
 echo "$(date): Pulling latest changes" >> $LOG_FILE
-git pull origin main >> $LOG_FILE 2>&1
+git pull origin master >> $LOG_FILE 2>&1
 
 # Install/update dependencies
 echo "$(date): Installing dependencies" >> $LOG_FILE
