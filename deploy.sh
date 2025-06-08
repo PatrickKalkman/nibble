@@ -3,7 +3,7 @@
 # deploy.sh - Automated deployment script
 set -e  # Exit on error
 
-LOG_FILE="/home/ubuntu/nibble/deploy.log"
+LOG_FILE="/home/ubuntu/nibble/logs/deploy.log"
 APP_DIR="/home/ubuntu/nibble"
 
 echo "$(date): Starting deployment" >> $LOG_FILE
