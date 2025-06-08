@@ -12,7 +12,7 @@ import {
   createRateLimiter, 
   verifyWebhookSignature,
   createIPAllowlist 
-} from './middleware/auth.js';
+} from './services/middleware/auth.js';
 
 const logger = pino();
 
