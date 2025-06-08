@@ -10,8 +10,7 @@ import NibbleService from './services/nibbleService.js';
 import { 
   createAuthMiddleware, 
   createRateLimiter, 
-  verifyWebhookSignature,
-  createIPAllowlist 
+  verifyWebhookSignature 
 } from './services/middleware/auth.js';
 
 const logger = pino();
@@ -25,7 +24,6 @@ const privateKey = readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH, 'utf8');
 // Security configurations
 const API_SECRET = process.env.NIBBLE_API_SECRET || crypto.randomBytes(32).toString('hex');
 const ENABLE_DEBUG_ENDPOINTS = process.env.ENABLE_DEBUG_ENDPOINTS === 'true';
-const ALLOWED_IPS = process.env.ALLOWED_IPS?.split(',') || [];
 
 // Log the API secret on startup (only in development)
 if (process.env.NODE_ENV !== 'production') {
@@ -97,7 +95,7 @@ webhooks.on('push', async ({ payload }) => {
 });
 
 app.post('/deploy', 
-  { preHandler: [requireAuth, ipAllowlist].filter(Boolean) },
+  { preHandler: [requireAuth].filter(Boolean) },
   async (request, reply) => {
     try {
       const { ref, repository } = request.body;
@@ -175,7 +173,7 @@ app.post('/webhooks', async (request, reply) => {
 });
 
 app.post('/trigger-nibble/:owner/:repo', 
-  { preHandler: [requireAuth, ipAllowlist].filter(Boolean) }, 
+  { preHandler: [requireAuth].filter(Boolean) }, 
   async (request, reply) => {
     try {
       const { owner, repo } = request.params;
