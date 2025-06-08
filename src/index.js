@@ -7,6 +7,12 @@ import cron from 'node-cron';
 import { readFileSync } from 'fs';
 import pino from 'pino';
 import NibbleService from './services/nibbleService.js';
+import { 
+  createAuthMiddleware, 
+  createRateLimiter, 
+  verifyWebhookSignature,
+  createIPAllowlist 
+} from './middleware/auth.js';
 
 const logger = pino();
 
@@ -14,6 +20,23 @@ const port = process.env.PORT || 3000;
 
 const appId      = process.env.GITHUB_APP_ID;
 const privateKey = readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH, 'utf8');
+
+// Security configurations
+const API_SECRET = process.env.NIBBLE_API_SECRET || crypto.randomBytes(32).toString('hex');
+const ENABLE_DEBUG_ENDPOINTS = process.env.ENABLE_DEBUG_ENDPOINTS === 'true';
+const ALLOWED_IPS = process.env.ALLOWED_IPS?.split(',') || [];
+
+// Log the API secret on startup (only in development)
+if (process.env.NODE_ENV !== 'production') {
+  logger.info(`API Secret: ${API_SECRET}`);
+} else {
+  logger.info('API authentication enabled');
+}
+
+// Create middleware instances
+const requireAuth = createAuthMiddleware(API_SECRET);
+const rateLimiter = createRateLimiter(10, 60000); // 10 requests per minute
+const webhookAuth = verifyWebhookSignature(process.env.GITHUB_WEBHOOK_SECRET);
 
 const appAuth = createAppAuth({
   appId: process.env.GITHUB_APP_ID,
@@ -105,33 +128,61 @@ app.post('/webhooks', async (request, reply) => {
   }
 });
 
-// Manual trigger endpoint (for testing)
-app.post('/trigger-nibble/:owner/:repo', async (request, reply) => {
-  try {
-    const { owner, repo } = request.params;
-    const result = await nibbleService.performNibble(owner, repo);
-    return { success: true, result };
-  } catch (error) {
-    logger.error('Error in manual trigger:', error);
-    reply.code(500);
-    return { error: error.message };
-  }
+app.post('/trigger-nibble/:owner/:repo', 
+  { preHandler: [requireAuth, ipAllowlist].filter(Boolean) }, 
+  async (request, reply) => {
+    try {
+      const { owner, repo } = request.params;
+      
+      // Additional validation
+      if (!owner || !repo || owner.length > 100 || repo.length > 100) {
+        return reply.code(400).send({ error: 'Invalid repository parameters' });
+      }
+      
+      logger.info(`Manual trigger requested for ${owner}/${repo} by ${request.ip}`);
+      
+      const result = await nibbleService.performNibble(owner, repo);
+      return { success: true, result };
+    } catch (error) {
+      logger.error('Error in manual trigger:', error);
+      reply.code(500);
+      return { error: error.message };
+    }
 });
 
-app.post('/debug/refresh-installations', async (request, reply) => {
-  try {
-    const count = await nibbleService.refreshInstallationsFromGitHub();
-    return { success: true, message: `Refreshed ${count} installations` };
-  } catch (error) {
-    reply.code(500);
-    return { error: error.message };
-  }
-});
+if (ENABLE_DEBUG_ENDPOINTS) {
+  app.post('/debug/refresh-installations', 
+    { preHandler: [requireAuth, ipAllowlist].filter(Boolean) },
+    async (request, reply) => {
+      try {
+        logger.info(`Installation refresh requested by ${request.ip}`);
+        const count = await nibbleService.refreshInstallationsFromGitHub();
+        return { success: true, message: `Refreshed ${count} installations` };
+      } catch (error) {
+        reply.code(500);
+        return { error: error.message };
+      }
+    }
+  );
 
-app.get('/debug/installations', async (request, reply) => {
-  const installations = nibbleService.getInstallations();
-  return { installations };
-});
+  app.get('/debug/installations', 
+    { preHandler: [requireAuth, ipAllowlist].filter(Boolean) },
+    async (request, reply) => {
+      logger.info(`Installation list requested by ${request.ip}`);
+      const installations = nibbleService.getInstallations();
+      return { installations };
+    }
+  );
+} else {
+  // Return 404 for debug endpoints when disabled
+  app.get('/debug/*', async (request, reply) => {
+    reply.code(404).send({ error: 'Not found' });
+  });
+  
+  app.post('/debug/*', async (request, reply) => {
+    reply.code(404).send({ error: 'Not found' });
+  });
+}
 
 // Schedule nightly nibbles (2 AM UTC)
 cron.schedule('0 2 * * *', async () => {
@@ -145,6 +196,17 @@ const start = async () => {
     await app.listen({ port, host: '0.0.0.0' });
     logger.info(`Nibble GitHub App listening on port ${port}`);
     logger.info('Ready to make your code slightly better, one bite at a time! 🍽️');
+    
+    // Security reminders
+    if (!process.env.NIBBLE_API_SECRET) {
+      logger.warn('⚠️  No NIBBLE_API_SECRET set in environment. Using random secret.');
+      logger.warn('⚠️  Set NIBBLE_API_SECRET in your .env file for persistent API authentication.');
+    }
+    
+    if (ENABLE_DEBUG_ENDPOINTS) {
+      logger.warn('⚠️  Debug endpoints are enabled. Disable in production by removing ENABLE_DEBUG_ENDPOINTS.');
+    }
+    
   } catch (err) {
     app.log.error(err);
     process.exit(1);
