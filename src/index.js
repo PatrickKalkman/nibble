@@ -82,7 +82,6 @@ const app = fastify({ logger: true });
 // Webhook handlers
 webhooks.on('installation.created', async ({ payload }) => {
   logger.info(`Nibble installed on ${payload.installation.account.login}`);
-  // Optionally store installation info
   await nibbleService.handleInstallation(payload.installation);
 });
 
