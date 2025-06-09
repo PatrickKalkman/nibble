@@ -265,7 +265,7 @@ app.post('/trigger-nibble/:owner/:repo',
 
 if (ENABLE_DEBUG_ENDPOINTS) {
   app.post('/debug/refresh-installations', 
-    { preHandler: [requireAuth, ipAllowlist].filter(Boolean) },
+    { preHandler: [requireAuth].filter(Boolean) },
     async (request, reply) => {
       try {
         logger.info(`Installation refresh requested by ${request.ip}`);
@@ -279,7 +279,7 @@ if (ENABLE_DEBUG_ENDPOINTS) {
   );
 
   app.get('/debug/installations', 
-    { preHandler: [requireAuth, ipAllowlist].filter(Boolean) },
+    { preHandler: [requireAuth].filter(Boolean) },
     async (request, reply) => {
       logger.info(`Installation list requested by ${request.ip}`);
       const installations = nibbleService.getInstallations();
