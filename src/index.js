@@ -10,7 +10,6 @@ import crypto from 'crypto';
 import NibbleService from './services/nibbleService.js';
 import { 
   createAuthMiddleware, 
-  createRateLimiter, 
   verifyWebhookSignature 
 } from './services/middleware/auth.js';
 import {
@@ -29,20 +28,16 @@ const host = process.env.HOST || '0.0.0.0';
 const appId      = process.env.GITHUB_APP_ID;
 const privateKey = readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH, 'utf8');
 
-// Security configurations
 const API_SECRET = process.env.NIBBLE_API_SECRET || crypto.randomBytes(32).toString('hex');
 const ENABLE_DEBUG_ENDPOINTS = process.env.ENABLE_DEBUG_ENDPOINTS === 'true';
 
-// Log the API secret on startup (only in development)
 if (process.env.NODE_ENV !== 'production') {
   logger.info(`API Secret: ${API_SECRET}`);
 } else {
   logger.info('API authentication enabled');
 }
 
-// Create middleware instances
 const requireAuth = createAuthMiddleware(API_SECRET);
-const rateLimiter = createRateLimiter(10, 60000); // 10 requests per minute
 const webhookAuth = verifyWebhookSignature(process.env.GITHUB_WEBHOOK_SECRET);
 const advancedRateLimiter = createAdvancedRateLimiter({
   maxRequests: 20,      // 20 requests per minute

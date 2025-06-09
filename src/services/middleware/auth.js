@@ -3,7 +3,6 @@ import pino from 'pino';
 
 const logger = pino();
 
-// Authentication middleware factory
 export const createAuthMiddleware = (secretKey) => {
   return async (request, reply) => {
     const token = request.headers['x-api-key'] || request.headers['authorization']?.replace('Bearer ', '');
@@ -20,30 +19,6 @@ export const createAuthMiddleware = (secretKey) => {
   };
 };
 
-// Rate limiting for additional security
-export const createRateLimiter = (maxRequests = 10, windowMs = 60000) => {
-  const requests = new Map();
-  
-  return async (request, reply) => {
-    const key = request.ip;
-    const now = Date.now();
-    const windowStart = now - windowMs;
-    
-    // Clean old entries
-    const userRequests = requests.get(key) || [];
-    const recentRequests = userRequests.filter(time => time > windowStart);
-    
-    if (recentRequests.length >= maxRequests) {
-      reply.code(429).send({ error: 'Too many requests' });
-      return;
-    }
-    
-    recentRequests.push(now);
-    requests.set(key, recentRequests);
-  };
-};
-
-// GitHub webhook signature verification (already secure)
 export const verifyWebhookSignature = (secret) => {
   return async (request, reply) => {
     const signature = request.headers['x-hub-signature-256'];
