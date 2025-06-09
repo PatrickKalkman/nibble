@@ -13,6 +13,13 @@ import {
   createRateLimiter, 
   verifyWebhookSignature 
 } from './services/middleware/auth.js';
+import {
+  securityHeaders,
+  blockSuspiciousRequests,
+  createAdvancedRateLimiter,
+  securityLogger,
+  createGeoBlock
+} from './services/middleware/security.js';
 
 const logger = pino();
 
@@ -37,6 +44,13 @@ if (process.env.NODE_ENV !== 'production') {
 const requireAuth = createAuthMiddleware(API_SECRET);
 const rateLimiter = createRateLimiter(10, 60000); // 10 requests per minute
 const webhookAuth = verifyWebhookSignature(process.env.GITHUB_WEBHOOK_SECRET);
+const advancedRateLimiter = createAdvancedRateLimiter({
+  maxRequests: 20,      // 20 requests per minute
+  windowMs: 60000,      // 1 minute window
+  blockDuration: 600000, // 10 minute block
+  maxViolations: 3      // Block after 3 violations
+});
+const geoBlock = createGeoBlock();
 
 const appAuth = createAppAuth({
   appId: process.env.GITHUB_APP_ID,
@@ -78,6 +92,44 @@ const nibbleService = new NibbleService(appAdapter);
 
 // Start the Fastify server
 const app = fastify({ logger: true });
+
+// Register global security middleware (order matters!)
+app.addHook('onRequest', securityLogger());
+app.addHook('onRequest', securityHeaders());
+app.addHook('onRequest', blockSuspiciousRequests());
+app.addHook('onRequest', advancedRateLimiter);
+app.addHook('onRequest', geoBlock);
+
+app.setNotFoundHandler((request, reply) => {
+  logger.warn({
+    ip: request.ip,
+    method: request.method,
+    url: request.url,
+    userAgent: request.headers['user-agent'],
+    type: 'not_found'
+  }, '404 request');
+  
+  reply.code(404).send({ error: 'Not found' });
+});
+
+// Custom error handler
+app.setErrorHandler((error, request, reply) => {
+  logger.error({
+    ip: request.ip,
+    method: request.method,
+    url: request.url,
+    error: error.message,
+    stack: error.stack,
+    type: 'server_error'
+  }, 'Server error');
+
+  // Don't expose internal error details in production
+  if (process.env.NODE_ENV === 'production') {
+    reply.code(500).send({ error: 'Internal server error' });
+  } else {
+    reply.code(500).send({ error: error.message });
+  }
+});
 
 // Webhook handlers
 webhooks.on('installation.created', async ({ payload }) => {
@@ -142,11 +194,24 @@ app.post('/deploy',
 // Health check endpoint
 app.get('/', async (request, reply) => {
   return { 
-    status: 'Nibble is ready to improve your code!',
-    version: '1.0.0',
-    uptime: process.uptime()
+    status: 'OK',
+    service: 'Nibble',
+    timestamp: new Date().toISOString()
   };
 });
+
+// Block common bot requests explicitly
+app.get('/robots.txt', async (request, reply) => {
+  reply.type('text/plain');
+  return `User-agent: *
+Disallow: /
+Crawl-delay: 86400`;
+});
+
+app.get('/favicon.ico', async (request, reply) => {
+  reply.code(404).send();
+});
+
 
 // Webhook endpoint
 app.post('/webhooks', async (request, reply) => {
@@ -178,13 +243,22 @@ app.post('/trigger-nibble/:owner/:repo',
     try {
       const { owner, repo } = request.params;
       
-      // Additional validation
-      if (!owner || !repo || owner.length > 100 || repo.length > 100) {
+      // Enhanced validation
+      if (!owner || !repo || 
+        owner.length > 100 || repo.length > 100 ||
+        !/^[a-zA-Z0-9_.-]+$/.test(owner) || 
+        !/^[a-zA-Z0-9_.-]+$/.test(repo)) {
         return reply.code(400).send({ error: 'Invalid repository parameters' });
       }
       
-      logger.info(`Manual trigger requested for ${owner}/${repo} by ${request.ip}`);
-      
+      logger.info({
+        ip: request.ip,
+        owner,
+        repo,
+        userAgent: request.headers['user-agent'],
+        type: 'manual_trigger'
+      }, 'Manual trigger requested');
+            
       const result = await nibbleService.performNibble(owner, repo);
       return { success: true, result };
     } catch (error) {
