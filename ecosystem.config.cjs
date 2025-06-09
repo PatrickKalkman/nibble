@@ -1,6 +1,3 @@
-// ecosystem.config.cjs
-// Note: Use .cjs extension for CommonJS in an ES module project
-
 module.exports = {
     apps: [{
       name: 'nibble',
