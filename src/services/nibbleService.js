@@ -205,6 +205,11 @@ class NibbleService {
       return null;
     }
 
+    this.logger.info(`Found NIBBLE improvement in ${nibbleItem.path}: ${improvement.title}`);
+    this.logger.info(`Improvement details: ${JSON.stringify(improvement)}`);
+    this.logger.info(`Confidence level: ${Math.round(improvement.confidence * 100)}%`);
+    this.logger.info(`Content: ${content.slice(0, 100)}...`);
+
     // Validate that the search text exists in the file
     if (!this.ai.validateSearchText(content, improvement.searchText)) {
       this.logger.info(`Search text validation failed for ${nibbleItem.path}`);
