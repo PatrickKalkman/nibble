@@ -55,7 +55,6 @@ export const blockSuspiciousRequests = () => {
         /^crawler\b/i,          // Starts with "crawler"
         /^spider\b/i,           // Starts with "spider"
         /scanner/i,             // Contains "scanner"
-        /^curl\//i,             // Curl user agent
         /^wget\//i,             // Wget user agent
         /^python-requests\//i,  // Python requests
         /^go-http-client\//i,   // Go HTTP client
