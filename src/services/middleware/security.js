@@ -20,57 +20,56 @@ export const securityHeaders = () => {
 
 // Block suspicious requests
 export const blockSuspiciousRequests = () => {
-  const suspiciousPatterns = [
-    /\.git\//,
-    /\.env/,
-    /\.aws/,
-    /\.ssh/,
-    /wp-admin/,
-    /wp-login/,
-    /admin/,
-    /phpmyadmin/,
-    /\.php$/,
-    /\.sql$/,
-    /\.bak$/,
-    /\.backup$/,
-    /\.old$/,
-    /\.config$/,
-    /\.log$/,
-    /\.xml$/,
-    /sitemap\.xml$/,
-    /robots\.txt$/,
-    /favicon\.ico$/,
-    /apple-touch-icon/,
-    /\.well-known/,
-    /aws/,
-    /azure/,
-    /gcp/,
-    /docker/,
-    /kubernetes/,
-    /\.json$/,
-    /package\.json$/,
-    /composer\.json$/,
-    /yarn\.lock$/,
-    /package-lock\.json$/
-  ];
-
-  const suspiciousUserAgents = [
-    /bot/i,
-    /crawler/i,
-    /spider/i,
-    /scan/i,
-    /curl/i,
-    /wget/i,
-    /python/i,
-    /go-http-client/i,
-    /nikto/i,
-    /sqlmap/i,
-    /nmap/i,
-    /masscan/i,
-    /zap/i,
-    /burp/i,
-    /nuclei/i
-  ];
+    const suspiciousPatterns = [
+        /\/\.git\//,           // Git directory access
+        /\/\.env$/,            // Environment files
+        /\/\.aws\//,           // AWS config
+        /\/\.ssh\//,           // SSH config
+        /\/wp-admin\//,        // WordPress admin
+        /\/wp-login/,          // WordPress login
+        /\/admin\//,           // Generic admin paths
+        /\/phpmyadmin\//,      // phpMyAdmin
+        /\.php$/,              // PHP files (if you don't use PHP)
+        /\.sql$/,              // SQL files
+        /\.bak$/,              // Backup files
+        /\.backup$/,           // Backup files
+        /\.old$/,              // Old files
+        /\.config$/,           // Config files
+        /\.log$/,              // Log files
+        /\/sitemap\.xml$/,     // SEO files (if not needed)
+        /\/apple-touch-icon/,  // iOS icons (if not needed)
+        /\/\.well-known\//,    // Well-known directory (unless you use it)
+        /\/aws\//,             // AWS paths
+        /\/azure\//,           // Azure paths
+        /\/gcp\//,             // Google Cloud paths
+        /\/docker\//,          // Docker paths
+        /\/kubernetes\//,      // Kubernetes paths
+        /\/package\.json$/,    // Package files
+        /\/composer\.json$/,   // Composer files
+        /\/yarn\.lock$/,       // Yarn lock files
+        /\/package-lock\.json$/ // NPM lock files
+      ];
+    
+      const suspiciousUserAgents = [
+        /^bot\b/i,              // Starts with "bot"
+        /^crawler\b/i,          // Starts with "crawler"
+        /^spider\b/i,           // Starts with "spider"
+        /scanner/i,             // Contains "scanner"
+        /^curl\//i,             // Curl user agent
+        /^wget\//i,             // Wget user agent
+        /^python-requests\//i,  // Python requests
+        /^go-http-client\//i,   // Go HTTP client
+        /nikto/i,               // Nikto security scanner
+        /sqlmap/i,              // SQL injection tool
+        /nmap/i,                // Network scanner
+        /masscan/i,             // Port scanner
+        /zaproxy/i,             // OWASP ZAP
+        /burpsuite/i,           // Burp Suite
+        /nuclei/i,              // Nuclei scanner
+        /acunetix/i,            // Acunetix scanner
+        /nessus/i,              // Nessus scanner
+        /openvas/i              // OpenVAS scanner
+      ];
 
   return async (request, reply) => {
     const url = request.url.toLowerCase();
